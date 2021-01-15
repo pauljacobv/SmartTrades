@@ -3,3 +3,4 @@ yfinance
 fbprophet
 bs4
 pandas_datareader
+nsepy
