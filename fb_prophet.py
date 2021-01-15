@@ -3,7 +3,11 @@ import matplotlib.pyplot as plt
 from fbprophet import Prophet
 import yfinance as yf
 import datetime
-
+import numpy as np
+import pandas as pd
+from nsepy import get_history
+from nsepy.derivatives import get_expiry_date
+from nsepy import get_index_pe_history
 
 class StockPredict:
 
@@ -14,19 +18,24 @@ class StockPredict:
         st.subheader('Data Statistics')
         st.write(data_stat.describe())
 
-    @st.cache
+    # @st.cache
     def get_stock_data(self, stockName):
         return yf.download(stockName)
 
+    def get_sliced_stockdata(self, df, start, end):
+        return df.loc[start:end]
     # @st.cache
     def get_prediction(self, df, start, end):
-        data_range = df.loc[start:end]
+        data_range = self.get_sliced_stockdata(df, start, end)
         data_range = data_range.reset_index()
         data_pred = data_range[["Date", "Adj Close"]]  # select Date and Price
         data_pred = data_pred.rename(columns={"Date": "ds", "Adj Close": "y"})
         self.model.fit(data_pred)
         future = self.model.make_future_dataframe(periods=days_to_predict)
         return self.model.predict(future)
+
+    def call_payoff(self, sT, strike_price, premium):
+        return np.where(sT > strike_price, sT - strike_price, 0) - premium
 
 
 if __name__ == '__main__':
@@ -35,11 +44,13 @@ if __name__ == '__main__':
     # data_load_state = st.text('Loading data...')
     st.sidebar.header('Enter Stock Name')
     stock_name = st.sidebar.text_input('Check Yahoo Finance for the exact listed name '
-                                       'for eg. GOOG for Google', 'GOOG')
-
+                                       'for eg. ^NSEBANK for BANKNIFTY', 'INFY.NS')
     sp = StockPredict()
 
     stockData = sp.get_stock_data(stockName=stock_name)
+    spot_price = stockData['Adj Close'][-1]
+
+    st.write('Share price of ' + stock_name + ' is ' + str(spot_price))
     if st.checkbox('Show raw data'):
         st.subheader('Raw data')
         st.write(stockData)
@@ -63,3 +74,43 @@ if __name__ == '__main__':
         plt.xlabel("Date")
         plt.ylabel("Close Stock Price")
         st.pyplot(sp.model.plot_components(prediction))
+
+    # Logarithmic Returns
+    stockData['Log Returns'] = np.log(stockData['Adj Close']/stockData['Adj Close'].shift(1))
+    # Computing Historical Volatility percentage
+    volatility_window = st.sidebar.number_input('Enter the volatility window', 5, 365)
+    stockData['Historical Volatility'] = 100*stockData['Log Returns'].rolling(window=volatility_window).std()
+    HV_btw_start_end = sp.get_sliced_stockdata(stockData['Historical Volatility'], start_date, end_date)
+    if st.checkbox('Display Historical Volatility'):
+        st.line_chart(HV_btw_start_end)
+        plt.title("Prediction of the Google Stock Price using the Prophet")
+        plt.xlabel("Date")
+        plt.ylabel("Close Stock Price")
+        # st.pyplot(sp.model.plot_components(prediction))
+
+    # Stock price range at expiration of the call
+    sT = np.arange(0.95 * spot_price, 1.1 * spot_price, 1)
+
+    col1, col2 = st.beta_columns(2)
+    col1.header('Long call')
+    col2.header('short call')
+    strike_price_long_call = col1.number_input('enter strike_price_long_call', 1400, 10000)
+    strike_price_short_call = col2.number_input('enter strike_price_short_call', 1380, 10000)
+    col11, col22 = st.beta_columns(2)
+    premium_long_call = col11.number_input('enter premium for long call', 15, 100)
+    premium_short_call = col22.number_input('enter premium for short call', 10, 100)
+    payoff_long_call = sp.call_payoff(sT, strike_price_long_call, premium_long_call)
+    payoff_short_call = sp.call_payoff(sT, strike_price_short_call, premium_short_call) * -1.0
+    payoff_bull_call_spread = payoff_long_call + payoff_short_call
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+    ax.spines['bottom'].set_position('zero')
+    ax.plot(sT, payoff_long_call, '--', label='Long Strike Call', color='g')
+    ax.plot(sT, payoff_short_call, '--', label='Short Strike Call ', color='r')
+    ax.plot(sT, payoff_bull_call_spread, label='Bull Call Spread')
+    plt.xlabel('Infosys Stock Price')
+    plt.ylabel('Profit and loss')
+    plt.legend()
+    plt.show()
+    st.pyplot(fig)
+    print('done')
