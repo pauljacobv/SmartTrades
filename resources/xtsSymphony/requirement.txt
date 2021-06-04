@@ -1,0 +1,26 @@
+
+version:python 3.7.3
+ 
+pip install requests
+pip install "python-socketio[client]"
+pip install python-socketio
+
+
+pip3 freeze of a working system; some of the modules not mentioned above are optional (mysql,tabulate) :
+
+certifi==2019.6.16
+chardet==3.0.4
+idna==2.8
+mysql-connector==2.2.9
+netifaces==0.10.9
+psutil==5.6.3
+pypiwin32==223
+python-engineio==3.9.3
+python-socketio==4.3.1
+pywin32==224
+requests==2.22.0
+six==1.12.0
+tabulate==0.8.3
+urllib3==1.25.3
+websocket-client==0.56.0
+
