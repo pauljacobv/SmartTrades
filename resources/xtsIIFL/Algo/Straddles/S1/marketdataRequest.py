@@ -313,8 +313,8 @@ class Request_option_symbol:
                        'optionType': optionType, 'strikePrice': strikePrice}
             udata = {}
             response = s.get(url, params=payload, data=json.dumps(udata), headers=headers, verify=False)
-            print('Option Symbol:')
-            raise ExceptionHandle
+            data = response.content.decode("utf8")
+            return data
         except ExceptionHandle:
             ExceptionHandle.checkResponse(response)
 

@@ -1,12 +1,12 @@
-import configparser
-import json
 import os
+import json
+import datetime
+import configparser
 from threading import Thread
-
-from Ordsocket_client import OrderSocket_io
 from facadeorder import XTconnect
 from xtmarketdata import XTConnection
 from msocket_client import MDSocket_io
+from Ordsocket_client import OrderSocket_io
 
 global response, xt, ixt, mxt
 
@@ -61,8 +61,7 @@ class XTS:
         Instruments = [{'exchangeSegment': 1,
                         'exchangeInstrumentID': "NIFTY BANK"}]
 
-        # mxt.sendSubscription(Instruments, 1504)
-        self.getCESymbol()
+        mxt.sendSubscription(Instruments, 1504)
 
     def connectsocket(self):
         soc = MDSocket_io(self.set_marketDataToken, self.set_muserID)
@@ -83,27 +82,54 @@ class XTS:
 
     def calculateATM(self, indexValue):
         atm = 0
-        delta = int(indexValue%100)
+        delta = int(indexValue % 100)
         if delta > 50:
-            atm = int((indexValue - delta) + 100) 
+            atm = int((indexValue - delta) + 100)
         else:
             atm = int(indexValue - delta)
-        
-        print("@@@@@ ATM @@@@@")
-        print(atm)
 
-    def getCESymbol(self):
-        exchangeSegment=2,
-        series='OPTIDX',
-        symbol='NIFTY',
-        expiryDate='24Jun2021',
-        optionType='CE',
-        strikePrice=15000
-        a= mxt.getOptionSymbol(exchangeSegment, series, symbol, expiryDate, optionType, strikePrice)
-        # a= mxt.getEquitySymbol(exchangeSegment,series, symbol)
-        print(a)
+        print("ATM Value :" + str(atm))
+        self.getPESymbol(atm)
 
+    def getCESymbol(self, atm):
+        exchangeSegment = 2
+        series = 'OPTIDX'
+        symbol = 'BANKNIFTY'
+        expiryDate = self.next_weekday(datetime.date.today(), 3)
+        optionType = 'CE'
+        strikePrice = atm
+        ce = mxt.getOptionSymbol(
+            exchangeSegment, series, symbol, expiryDate, optionType, strikePrice)
+        ce = json.loads(ce)
+        ceSymbol = ce["result"][0]["Description"]
+        if(str(atm) in ceSymbol):
+            # BANKNIFTY2161035400CE
+            print(ceSymbol)
+        else:
+            print("ERROR")
 
+    def getPESymbol(self, atm):
+        exchangeSegment = 2
+        series = 'OPTIDX'
+        symbol = 'BANKNIFTY'
+        expiryDate = self.next_weekday(datetime.date.today(), 3)
+        optionType = 'PE'
+        strikePrice = atm
+        pe = mxt.getOptionSymbol(
+            exchangeSegment, series, symbol, expiryDate, optionType, strikePrice)
+        pe = json.loads(pe)
+        peSymbol = pe["result"][0]["Description"]
+        if(str(atm) in peSymbol):
+            # BANKNIFTY2161035400PE
+            print(peSymbol)
+        else:
+            print("ERROR")
+
+    def next_weekday(self, d, weekday):
+        days_ahead = weekday - d.weekday()
+        if days_ahead <= 0:  # Target day already happened this week
+            days_ahead += 7
+        return (d + datetime.timedelta(days_ahead)).strftime('%d%b%Y')
 
 
 if __name__ == "__main__":
