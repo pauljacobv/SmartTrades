@@ -9,6 +9,8 @@ from msocket_client import MDSocket_io
 from Ordsocket_client import OrderSocket_io
 
 global response, xt, ixt, mxt
+ceFlag = True
+peFlag = True
 
 
 class XTS:
@@ -99,6 +101,7 @@ class XTS:
         self.getPESymbol(strikePrice)
 
     def getCESymbol(self, strikePrice):
+        global ceFlag
         exchangeSegment = 2
         series = 'OPTIDX'
         symbol = 'BANKNIFTY'
@@ -109,27 +112,31 @@ class XTS:
             exchangeSegment, series, symbol, expiryDate, optionType, strikePrice)
         ce = json.loads(ce)
         ceSymbol = ce["result"][0]["Description"]
+        print("CE Symbol :"+ str(ceSymbol))
         if(str(strikePrice) in ceSymbol):
-            # BANKNIFTY2161035400CE
-            print(ce["result"][0]["InstrumentID"])
-            po_CE = self.placeorder(
-                "NSEFO",
-                int(ce["result"][0]["InstrumentID"]),
-                "MIS",
-                "MARKET",
-                "SELL",
-                75,
-                75,
-                datetime.datetime.now().strftime("ST%d%m%Y%H%M%S")
-            )
+            if(ceFlag):
+                # BANKNIFTY2161035400CE
+                print(ce["result"][0]["InstrumentID"])
+                po_CE = self.placeorder(
+                    "NSEFO",
+                    int(ce["result"][0]["InstrumentID"]),
+                    "MIS",
+                    "MARKET",
+                    "SELL",
+                    75,
+                    75,
+                    datetime.datetime.now().strftime("ST%d%m%Y%H%M%S")
+                )
 
-            print("### CE ORDER RESPONSE ###")
-            print(po_CE)
-            print("-------------------------")
+                print("### CE ORDER RESPONSE ###")
+                print(po_CE)
+                print("-------------------------")
+                ceFlag = False
         else:
-            print("ERROR")
+            print("ERROR IN CE SYMBOL")
 
     def getPESymbol(self, strikePrice):
+        global peFlag
         exchangeSegment = 2
         series = 'OPTIDX'
         symbol = 'BANKNIFTY'
@@ -140,24 +147,27 @@ class XTS:
             exchangeSegment, series, symbol, expiryDate, optionType, strikePrice)
         pe = json.loads(pe)
         peSymbol = pe["result"][0]["Description"]
+        print("PE Symbol :"+ str(peSymbol))
         if(str(strikePrice) in peSymbol):
-            # BANKNIFTY2161035400PE
-            po_PE = self.placeorder(
-                "NSEFO",
-                int(pe["result"][0]["InstrumentID"]),
-                "MIS",
-                "MARKET",
-                "SELL",
-                75,
-                75,
-                datetime.datetime.now().strftime("ST%d%m%Y%H%M%S")
-            )
+            if(peFlag):
+                # BANKNIFTY2161035400PE
+                po_PE = self.placeorder(
+                    "NSEFO",
+                    int(pe["result"][0]["InstrumentID"]),
+                    "MIS",
+                    "MARKET",
+                    "SELL",
+                    75,
+                    75,
+                    datetime.datetime.now().strftime("ST%d%m%Y%H%M%S")
+                )
 
-            print("### PE ORDER RESPONSE ###")
-            print(po_PE)
-            print("-------------------------")
+                print("### PE ORDER RESPONSE ###")
+                print(po_PE)
+                print("-------------------------")
+                peFlag = False
         else:
-            print("ERROR")
+            print("ERROR IN PE SYMBOL")
 
     def placeorder(self, exchangesegment, instrumentid, producttype, ordertype, orderside, orderQuantity, disclosedQuantity, orderUniqueIdentifier):
         response_data = ixt.placeOrder(
