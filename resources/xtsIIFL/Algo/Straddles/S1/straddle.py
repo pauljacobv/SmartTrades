@@ -97,6 +97,7 @@ class XTS:
             strikePrice = int(indexValue - delta)
 
         print("ATM Value :" + str(strikePrice))
+
         self.getCESymbol(strikePrice)
         self.getPESymbol(strikePrice)
 
@@ -116,14 +117,12 @@ class XTS:
         if(str(strikePrice) in ceSymbol):
             if(ceFlag):
                 # BANKNIFTY2161035400CE
-                print(ce["result"][0]["InstrumentID"])
                 po_CE = self.placeorder(
                     "NSEFO",
-                    int(ce["result"][0]["InstrumentID"]),
+                    int(ce["result"][0]["ExchangeInstrumentID"]),
                     "MIS",
                     "MARKET",
                     "SELL",
-                    75,
                     75,
                     datetime.datetime.now().strftime("ST%d%m%Y%H%M%S")
                 )
@@ -153,11 +152,10 @@ class XTS:
                 # BANKNIFTY2161035400PE
                 po_PE = self.placeorder(
                     "NSEFO",
-                    int(pe["result"][0]["InstrumentID"]),
+                    int(pe["result"][0]["ExchangeInstrumentID"]),
                     "MIS",
                     "MARKET",
                     "SELL",
-                    75,
                     75,
                     datetime.datetime.now().strftime("ST%d%m%Y%H%M%S")
                 )
@@ -169,7 +167,7 @@ class XTS:
         else:
             print("ERROR IN PE SYMBOL")
 
-    def placeorder(self, exchangesegment, instrumentid, producttype, ordertype, orderside, orderQuantity, disclosedQuantity, orderUniqueIdentifier):
+    def placeorder(self, exchangesegment, instrumentid, producttype, ordertype, orderside, orderQuantity, orderUniqueIdentifier):
         response_data = ixt.placeOrder(
             exchangesegment,
             instrumentid,
@@ -177,7 +175,7 @@ class XTS:
             ordertype,
             orderside,
             "DAY",
-            disclosedQuantity,
+            0,
             orderQuantity,
             0,
             0,
