@@ -53,13 +53,19 @@ class XTS:
         self.set_iuserID = ixt.userID
         self.set_muserID = mxt.userID
 
+        # Set Client ID
+        self.client_List = ixt.clientCodes
+        self.clientID = self.client_List[0]
+
         #### SOCKET CONNECTION ####
         """Connected to the socket"""
         Thread(target=self.connectsocket).start()
 
         # Instruments for subscribing
-        Instruments = [{'exchangeSegment': 1,
-                        'exchangeInstrumentID': "NIFTY BANK"}]
+        Instruments = [{
+            'exchangeSegment': 1,
+            'exchangeInstrumentID': "NIFTY BANK"
+        }]
 
         mxt.sendSubscription(Instruments, 1504)
 
@@ -70,7 +76,7 @@ class XTS:
         socketconnect = soc.connect()
 
     def on_message1504_json_full(self, data):
-        print('In main 1504 Index message!' + data)
+        # print('In main 1504 Index message!' + data)
         x = {}
         x = json.loads(data)
         indexValue = x["IndexValue"]
@@ -78,52 +84,97 @@ class XTS:
         if x["IndexName"] == "NIFTY BANK":
             if x["IndexValue"] > 0:
                 """Calculate ATM"""
-                self.calculateATM(indexValue)
+                self.getStrikePrice(indexValue)
 
-    def calculateATM(self, indexValue):
-        atm = 0
+    def getStrikePrice(self, indexValue):
+        strikePrice = 0
         delta = int(indexValue % 100)
         if delta > 50:
-            atm = int((indexValue - delta) + 100)
+            strikePrice = int((indexValue - delta) + 100)
         else:
-            atm = int(indexValue - delta)
+            strikePrice = int(indexValue - delta)
 
-        print("ATM Value :" + str(atm))
-        self.getPESymbol(atm)
+        print("ATM Value :" + str(strikePrice))
+        self.getCESymbol(strikePrice)
+        self.getPESymbol(strikePrice)
 
-    def getCESymbol(self, atm):
+    def getCESymbol(self, strikePrice):
         exchangeSegment = 2
         series = 'OPTIDX'
         symbol = 'BANKNIFTY'
         expiryDate = self.next_weekday(datetime.date.today(), 3)
         optionType = 'CE'
-        strikePrice = atm
+        strikePrice = strikePrice
         ce = mxt.getOptionSymbol(
             exchangeSegment, series, symbol, expiryDate, optionType, strikePrice)
         ce = json.loads(ce)
         ceSymbol = ce["result"][0]["Description"]
-        if(str(atm) in ceSymbol):
+        if(str(strikePrice) in ceSymbol):
             # BANKNIFTY2161035400CE
-            print(ceSymbol)
+            print(ce["result"][0]["InstrumentID"])
+            po_CE = self.placeorder(
+                "NSEFO",
+                int(ce["result"][0]["InstrumentID"]),
+                "MIS",
+                "MARKET",
+                "SELL",
+                75,
+                75,
+                datetime.datetime.now().strftime("ST%d%m%Y%H%M%S")
+            )
+
+            print("### CE ORDER RESPONSE ###")
+            print(po_CE)
+            print("-------------------------")
         else:
             print("ERROR")
 
-    def getPESymbol(self, atm):
+    def getPESymbol(self, strikePrice):
         exchangeSegment = 2
         series = 'OPTIDX'
         symbol = 'BANKNIFTY'
         expiryDate = self.next_weekday(datetime.date.today(), 3)
         optionType = 'PE'
-        strikePrice = atm
+        strikePrice = strikePrice
         pe = mxt.getOptionSymbol(
             exchangeSegment, series, symbol, expiryDate, optionType, strikePrice)
         pe = json.loads(pe)
         peSymbol = pe["result"][0]["Description"]
-        if(str(atm) in peSymbol):
+        if(str(strikePrice) in peSymbol):
             # BANKNIFTY2161035400PE
-            print(peSymbol)
+            po_PE = self.placeorder(
+                "NSEFO",
+                int(pe["result"][0]["InstrumentID"]),
+                "MIS",
+                "MARKET",
+                "SELL",
+                75,
+                75,
+                datetime.datetime.now().strftime("ST%d%m%Y%H%M%S")
+            )
+
+            print("### PE ORDER RESPONSE ###")
+            print(po_PE)
+            print("-------------------------")
         else:
             print("ERROR")
+
+    def placeorder(self, exchangesegment, instrumentid, producttype, ordertype, orderside, orderQuantity, disclosedQuantity, orderUniqueIdentifier):
+        response_data = ixt.placeOrder(
+            exchangesegment,
+            instrumentid,
+            producttype,
+            ordertype,
+            orderside,
+            "DAY",
+            disclosedQuantity,
+            orderQuantity,
+            0,
+            0,
+            orderUniqueIdentifier,
+            self.clientID
+        )
+        return response_data
 
     def next_weekday(self, d, weekday):
         days_ahead = weekday - d.weekday()
