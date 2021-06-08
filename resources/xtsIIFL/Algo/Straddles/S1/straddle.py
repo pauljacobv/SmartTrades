@@ -1,5 +1,7 @@
 import os
 import json
+import time
+import schedule
 import datetime
 import configparser
 from threading import Thread
@@ -195,5 +197,7 @@ if __name__ == "__main__":
     mxt = XTConnection()
     ixt = XTconnect()
     xts = XTS()
-    xts.ex()
-    Exit = input("Press Enter to Exit")
+    schedule.every().day.at("09:30").do(xts.ex)
+    while True:
+        schedule.run_pending()
+        time.sleep(1)
