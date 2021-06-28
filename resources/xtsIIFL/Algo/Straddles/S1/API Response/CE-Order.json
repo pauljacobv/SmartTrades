@@ -1,0 +1,10 @@
+{
+   "type":"success",
+   "code":"s-orders-0001",
+   "description":"Request sent",
+   "result":{
+      "AppOrderID":1100045643,
+      "OrderUniqueIdentifier":"ST28062021123721",
+      "ClientID":""
+   }
+}

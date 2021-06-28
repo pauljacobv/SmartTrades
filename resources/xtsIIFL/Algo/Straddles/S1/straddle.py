@@ -3,6 +3,7 @@ import json
 import time
 import schedule
 import datetime
+import requests
 import configparser
 from threading import Thread
 from facadeorder import XTconnect
@@ -13,6 +14,8 @@ from Ordsocket_client import OrderSocket_io
 global response, xt, ixt, mxt
 ceFlag = True
 peFlag = True
+ceSLMFlag = False
+peSLMFlag = False
 
 
 class XTS:
@@ -24,18 +27,22 @@ class XTS:
     def ex(self):
         """Redirect the user to the login url obtained from xt.login_url(), and receive the token"""
 
-        currDirMain = os.getcwd()
-        configParser = configparser.RawConfigParser()
-        configFilePath = os.path.join(currDirMain, 'config.ini')
-        configParser.read(configFilePath)
-        self.port = configParser.get('socket', 'port').strip()
+        currDirMain     = os.getcwd()
+        configParser    = configparser.RawConfigParser()
+        configFilePath  = os.path.join(currDirMain, 'config.ini')
 
-        self.isecretkey = configParser.get('USER', 'isecretkey').strip()
-        self.msecretkey = configParser.get('USER', 'msecretkey').strip()
+        configParser.read(configFilePath)
+
+        self.port           = configParser.get('socket', 'port').strip()
+        self.isecretkey     = configParser.get('USER', 'isecretkey').strip()
+        self.msecretkey     = configParser.get('USER', 'msecretkey').strip()
         self.interactiveKey = configParser.get('USER', 'iappKey').strip()
-        self.marketDataKey = configParser.get('USER', 'mappKey').strip()
-        self.source = configParser.get('USER', 'source').strip()
-        self.port = configParser.get('socket', 'port').strip()
+        self.marketDataKey  = configParser.get('USER', 'mappKey').strip()
+        self.source         = configParser.get('USER', 'source').strip()
+        self.port           = configParser.get('socket', 'port').strip()
+
+        self.telegramtoken  = configParser.get('Telegram', 'token').strip()
+        self.telegramchatid = configParser.get('Telegram', 'chatid').strip()
 
         print('------------------------------------------------------------------------')
         print("Interactive AppKey - " + self.interactiveKey)
@@ -72,7 +79,7 @@ class XTS:
         }]
 
         mxt.sendSubscription(Instruments, 1504)
-
+        
     def connectsocket(self):
         soc = MDSocket_io(self.set_marketDataToken, self.set_muserID)
         el = soc.get_emitter()
@@ -104,7 +111,6 @@ class XTS:
         self.getPESymbol(strikePrice)
 
     def getCESymbol(self, strikePrice):
-        global ceFlag
         exchangeSegment = 2
         series = 'OPTIDX'
         symbol = 'BANKNIFTY'
@@ -126,18 +132,19 @@ class XTS:
                     "MARKET",
                     "SELL",
                     75,
+                    0,
+                    0,
                     datetime.datetime.now().strftime("ST%d%m%Y%H%M%S")
                 )
 
                 print("### CE ORDER RESPONSE ###")
                 print(po_CE)
                 print("-------------------------")
-                ceFlag = False
+                self.checkOrderStatus("CE", po_CE["result"]["AppOrderID"])
         else:
             print("ERROR IN CE SYMBOL")
 
     def getPESymbol(self, strikePrice):
-        global peFlag
         exchangeSegment = 2
         series = 'OPTIDX'
         symbol = 'BANKNIFTY'
@@ -159,17 +166,19 @@ class XTS:
                     "MARKET",
                     "SELL",
                     75,
+                    0,
+                    0,
                     datetime.datetime.now().strftime("ST%d%m%Y%H%M%S")
                 )
 
                 print("### PE ORDER RESPONSE ###")
                 print(po_PE)
                 print("-------------------------")
-                peFlag = False
+                self.checkOrderStatus("PE", po_PE["result"]["AppOrderID"])
         else:
             print("ERROR IN PE SYMBOL")
 
-    def placeorder(self, exchangesegment, instrumentid, producttype, ordertype, orderside, orderQuantity, orderUniqueIdentifier):
+    def placeorder(self, exchangesegment, instrumentid, producttype, ordertype, orderside, orderQuantity, limitPrice, stopPrice, orderUniqueIdentifier):
         response_data = ixt.placeOrder(
             exchangesegment,
             instrumentid,
@@ -179,12 +188,82 @@ class XTS:
             "DAY",
             0,
             orderQuantity,
-            0,
-            0,
+            limitPrice,
+            stopPrice,
             orderUniqueIdentifier,
             self.clientID
         )
         return response_data
+
+    def placeSLM(self, TradingSymbol, ExchangeInstrumentID, OrderAverageTradedPrice):
+        
+        if(TradingSymbol == "CE" and not ceSLMFlag):
+            CE_SLM_Price = float(OrderAverageTradedPrice.strip() or 0) + 50
+            po_CESLM = self.placeorder(
+                    "NSEFO",
+                    int(ExchangeInstrumentID),
+                    "MIS",
+                    "StopMarket",
+                    "BUY",
+                    75,
+                    0,
+                    CE_SLM_Price,
+                    datetime.datetime.now().strftime("CESLM%d%m%Y%H%M%S")
+                )
+
+            print("### CE SLM ORDER RESPONSE ###")
+            print(po_CESLM)
+            print("-------------------------")
+            self.checkOrderStatus("CESLM", po_CESLM["result"]["AppOrderID"])
+
+        elif(TradingSymbol == "PE" and not peSLMFlag):
+            PE_SLM_Price = float(OrderAverageTradedPrice.strip() or 0) + 60
+            po_PESLM = self.placeorder(
+                    "NSEFO",
+                    int(ExchangeInstrumentID),
+                    "MIS",
+                    "StopMarket",
+                    "BUY",
+                    75,
+                    0,
+                    PE_SLM_Price,
+                    datetime.datetime.now().strftime("PESLM%d%m%Y%H%M%S")
+                )
+
+            print("### PE SLM ORDER RESPONSE ###")
+            print(po_PESLM)
+            print("-------------------------")
+            self.checkOrderStatus("PESLM", po_PESLM["result"]["AppOrderID"])
+
+    def checkOrderStatus(self, TradingSymbol, AppOrderID):
+
+        global ceFlag, peFlag, ceSLMFlag, peSLMFlag
+
+        response_data = ixt.getorderstatus(
+            AppOrderID
+        )
+
+        for results in response_data['result']:
+
+            if(results['OrderStatus'] == "Filled"):
+
+                if(TradingSymbol == "CE"):
+                    ceFlag = False
+                    self.placeSLM(TradingSymbol, results['ExchangeInstrumentID'], results['OrderAverageTradedPrice'])
+                if(TradingSymbol == "PE"):
+                    peFlag = False
+                    self.placeSLM(TradingSymbol, results['ExchangeInstrumentID'], results['OrderAverageTradedPrice'])
+                if(TradingSymbol == "CESLM"):
+                    ceSLMFlag = True
+                    print("Send Telegram Message CESLM")
+                if(TradingSymbol == "PESLM"):
+                    peSLMFlag = True
+                    print("Send Telegram Message PESLM")
+                    
+
+            elif(results['OrderStatus'] == "Rejected"):
+                print("Order Rejected")
+                print("Send Telegram Message - Order Rejected - TradingSymbol")
 
     def next_weekday(self, d, weekday):
         days_ahead = weekday - d.weekday()
@@ -192,12 +271,23 @@ class XTS:
             days_ahead += 7
         return (d + datetime.timedelta(days_ahead)).strftime('%d%b%Y')
 
+    def telegram_bot_sendtext(self, bot_message):
+
+        bot_token   = self.telegramtoken
+        bot_chatID  = self.chatID
+        send_text   = 'https://api.telegram.org/bot' + bot_token + \
+        '/sendMessage?chat_id=' + bot_chatID + '&parse_mode=Markdown&text=' + bot_message
+        
+        response = requests.get(send_text)
+    
+        return response.json()
 
 if __name__ == "__main__":
     mxt = XTConnection()
     ixt = XTconnect()
     xts = XTS()
-    schedule.every().day.at("09:30").do(xts.ex)
+    xts.ex()
+    # schedule.every().day.at("09:30").do(xts.ex)
     while True:
         schedule.run_pending()
         time.sleep(1)
